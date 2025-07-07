@@ -10,10 +10,15 @@
 #   universal: false
 
 -e file:.
+coverage==7.9.2
+    # via pytest-cov
+filelock==3.18.0
+    # via pytest-mypy
 iniconfig==2.1.0
     # via pytest
 lxml==6.0.0
 mypy==1.16.1
+    # via pytest-mypy
 mypy-extensions==1.1.0
     # via mypy
 packaging==25.0
@@ -22,9 +27,17 @@ pathspec==0.12.1
     # via mypy
 pluggy==1.6.0
     # via pytest
+    # via pytest-cov
 pygments==2.19.2
     # via pytest
 pytest==8.4.1
+    # via pytest-cov
+    # via pytest-env
+    # via pytest-mypy
+pytest-cov==6.2.1
+pytest-env==1.1.5
+pytest-mypy==1.0.1
+ruff==0.12.2
 sqlglot==26.33.0
     # via query-farm-sql-manipulation
 typing-extensions==4.14.1

@@ -147,9 +147,9 @@ sql = "SELECT * FROM data WHERE result = (x = 1)"
 
 ## Supported SQL Constructs
 
-- **Logical Operators**: AND, OR, NOT
-- **Comparison Operators**: =, <>, <, >, <=, >=, LIKE, IN, IS NULL, etc.
-- **Complex Expressions**: CASE statements, subqueries, function calls
+- **Logical Operators**: `AND`, `OR`, `NOT`
+- **Comparison Operators**: `=`, `<>`, `<`, `>`, `<=`, `>=`, `LIKE`, `IN`, `IS NULL`, etc.
+- **Complex Expressions**: `CASE` statements, subqueries, function calls
 - **Nested Logic**: Parentheses and nested boolean expressions
 - **Multiple Dialects**: DuckDB, PostgreSQL, MySQL, SQLite, and more via SQLGlot
 
