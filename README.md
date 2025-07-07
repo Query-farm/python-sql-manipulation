@@ -1,4 +1,4 @@
-# Query.Farm SQL Manipulation
+# [Query.Farm](https://query.farm) SQL Manipulation
 
 A Python library for intelligent SQL predicate manipulation using [SQLGlot](https://sqlglot.com/sqlglot.html). This library provides tools to safely remove specific predicates from `SQL WHERE` clauses and filter SQL statements based on column availability.
 
