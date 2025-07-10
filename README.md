@@ -179,7 +179,7 @@ allowed_columns = {'age', 'role'}
 
 result = transforms.filter_column_references_statement(
     sql=sql,
-    allowed_column_names=allowed_columns
+    selector=lambda col: col.name in allowed_columns,
 )
 
 # Result: SELECT * FROM users WHERE age > 18 AND role = 'admin'
