@@ -97,7 +97,9 @@ def filter_predicates_with_right_side_column_references(
 
     for predicate in where_clause.find_all(sqlglot.expressions.Predicate):
         assert predicate is not None
-        if predicate.right.find(sqlglot.expressions.Column):
+        if isinstance(predicate, sqlglot.expressions.Binary) and predicate.right.find(
+            sqlglot.expressions.Column
+        ):
             remove_expression_part(predicate)
 
     return statement

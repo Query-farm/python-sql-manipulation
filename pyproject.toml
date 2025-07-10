@@ -1,6 +1,6 @@
 [project]
 name = "query-farm-sql-manipulation"
-version = "0.1.5"
+version = "0.1.6"
 description = "A Python library for intelligent SQL predicate manipulation using SQLGlot. This library provides tools to safely remove specific predicates from `SQL WHERE` clauses and filter SQL statements based on column availability."
 authors = [
     { name = "Rusty Conover", email = "rusty@query.farm" }

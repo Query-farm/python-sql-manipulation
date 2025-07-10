@@ -159,6 +159,7 @@ def test_where_clause_extract(sql: str, expected: str) -> None:
     "sql, expected",
     [
         ("""v1 >= v1 + 5 and z = 5""", "z = 5"),
+        ("v1 in ('foobar') and z = 5", "v1 IN ('foobar') AND z = 5"),
         ("""((v1 >= v1 + 5) or t1 = 5) and z = 5""", "(t1 = 5) AND z = 5"),
     ],
 )
