@@ -44,7 +44,7 @@ def _remove_target_predicate(sql: str, target: str, expected: str) -> None:
     matching_predicates = [p for p in predicates if p == target_predicate]
 
     # Assert that we found at least one match
-    assert matching_predicates, f"No matching predicate found for: {target}"
+    assert matching_predicates, f"No matching predicate found for: {target} {expression}"
 
     # Remove all matching predicates
     for matched_predicate in matching_predicates:
@@ -143,6 +143,31 @@ def test_remove_logical_predicates_errors(sql: str, target: str) -> None:
     """
     with pytest.raises(ValueError):
         _remove_target_predicate(sql, target, "")
+
+
+@pytest.mark.parametrize(
+    "sql, expected", [("""x = 1""", "x = 1"), ("foo = bar and z = 4", "foo = bar AND z = 4")]
+)
+def test_where_clause_extract(sql: str, expected: str) -> None:
+    statement = sqlglot.parse_one(f'SELECT * FROM "data" WHERE {sql}')
+    extracted_where = transforms.where_clause_contents(statement)
+    assert extracted_where is not None, "Expected a WHERE clause to be present"
+    assert extracted_where.sql("duckdb") == expected
+
+
+@pytest.mark.parametrize(
+    "sql, expected",
+    [
+        ("""v1 >= v1 + 5 and z = 5""", "z = 5"),
+        ("""((v1 >= v1 + 5) or t1 = 5) and z = 5""", "(t1 = 5) AND z = 5"),
+    ],
+)
+def test_filter_predicates_with_right_side_column_references(sql: str, expected: str) -> None:
+    statement = sqlglot.parse_one(f'SELECT * FROM "data" WHERE {sql}')
+    updated = transforms.filter_predicates_with_right_side_column_references(statement)
+    extracted_where = transforms.where_clause_contents(updated)
+    assert extracted_where is not None, "Expected a WHERE clause to be present"
+    assert extracted_where.sql("duckdb") == expected
 
 
 @pytest.mark.parametrize(
@@ -356,8 +381,10 @@ def test_filter_column_references(
 ) -> None:
     dialect = "duckdb"
     full_sql = f'SELECT * FROM "data" AS "data" WHERE {sql}'
-    result = transforms.filter_column_references_statement(
-        sql=full_sql, allowed_column_names=column_names
+    statement = sqlglot.parse_one(full_sql, dialect="duckdb")
+    result = transforms.filter_column_references(
+        statement=statement,
+        selector=lambda col: col.name in column_names,
     )
 
     optimized = sqlglot.optimizer.optimize(result, rules=RULES_WITHOUT_NORMALIZE, dialect=dialect)

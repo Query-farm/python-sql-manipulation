@@ -1,6 +1,34 @@
 # [Query.Farm](https://query.farm) SQL Manipulation
 
-A Python library for intelligent SQL predicate manipulation using [SQLGlot](https://sqlglot.com/sqlglot.html). This library provides tools to safely remove specific predicates from `SQL WHERE` clauses and filter SQL statements based on column availability.
+A Python library for intelligent SQL predicate manipulation using [SQLGlot](https://sqlglot.org)
+
+### Column Filtering with Complex Expressions
+
+```python
+import sqlglot
+from query_farm_sql_manipulation import transforms
+
+sql = '''
+SELECT * FROM users
+WHERE age > 18
+  AND (status = 'active' OR role = 'admin')
+  AND department IN ('engineering', 'sales')
+'''
+
+# Parse the statement first
+statement = sqlglot.parse_one(sql, dialect="duckdb")
+
+# Only keep predicates involving 'age' and 'role'
+allowed_columns = {'age', 'role'}
+
+result = transforms.filter_column_references(
+    statement=statement,
+    selector=lambda col: col.name in allowed_columns,
+)
+
+# Result: SELECT * FROM users WHERE age > 18 AND role = 'admin'
+print(result.sql())
+```
 
 ## Features
 
@@ -44,19 +72,22 @@ transforms.remove_expression_part(target_predicate)
 print(statement.sql())
 ```
 
-### Column-Based Filtering
+### Column-Name Based Filtering
 
 ```python
+import sqlglot
 from query_farm_sql_manipulation import transforms
 
-# Filter SQL to only include predicates with allowed columns
+# Parse SQL statement first
 sql = 'SELECT * FROM data WHERE color = "red" AND size > 10 AND type = "car"'
+statement = sqlglot.parse_one(sql, dialect="duckdb")
+
+# Filter to only include predicates with allowed columns
 allowed_columns = {"color", "type"}
 
-filtered = transforms.filter_column_references_statement(
-    sql=sql,
-    allowed_column_names=allowed_columns,
-    dialect="duckdb"
+filtered = transforms.filter_column_references(
+    statement=statement,
+    selector=lambda col: col.name in allowed_columns,
 )
 
 # Result: SELECT * FROM data WHERE color = "red" AND type = "car"
@@ -67,7 +98,7 @@ print(filtered.sql())
 
 ### `remove_expression_part(child: sqlglot.Expression) -> None`
 
-Removes the specified expression from its parent, respecting logical structure.
+Removes the specified SQLGlot expression from its parent, respecting logical structure.
 
 **Parameters:**
 - `child`: The SQLGlot expression to remove
@@ -82,20 +113,39 @@ Removes the specified expression from its parent, respecting logical structure.
 - `NOT` expressions: Removes the entire NOT expression
 - `CASE` statements: Removes conditional branches
 
-### `filter_column_references_statement(*, sql: str, allowed_column_names: Container[str], dialect: str = "duckdb") -> sqlglot.Expression`
+### `filter_column_references(*, statement: sqlglot.Expression, selector: Callable[[sqlglot.expressions.Column], bool]) -> sqlglot.Expression`
 
-Filters a SQL statement to remove predicates containing columns not in the allowed set.
+Filters a SQL statement to remove predicates containing columns that don't match the selector criteria.
 
 **Parameters:**
-- `sql`: The SQL statement to filter
-- `allowed_column_names`: Container of column names that should be preserved
-- `dialect`: SQL dialect for parsing (default: "duckdb")
+- `statement`: The SQLGlot expression to filter
+- `selector`: A callable that takes a Column and returns True if it should be preserved, False if it should be removed
 
 **Returns:**
-- Filtered SQLGlot expression with non-allowed columns removed
+- Filtered SQLGlot expression with non-matching columns removed
 
 **Raises:**
 - `ValueError`: If a column can't be cleanly removed due to interactions with allowed columns
+
+### `where_clause_contents(statement: sqlglot.expressions.Expression) -> sqlglot.expressions.Expression | None`
+
+Extracts the contents of the WHERE clause from a SQLGlot expression.
+
+**Parameters:**
+- `statement`: The SQLGlot expression to extract from
+
+**Returns:**
+- The contents of the WHERE clause, or None if no WHERE clause exists
+
+### `filter_predicates_with_right_side_column_references(statement: sqlglot.expressions.Expression) -> sqlglot.Expression`
+
+Filters out predicates that have column references on the right side of comparisons.
+
+**Parameters:**
+- `statement`: The SQLGlot expression to filter
+
+**Returns:**
+- Filtered SQLGlot expression with right-side column reference predicates removed
 
 ## Examples
 
@@ -140,9 +190,15 @@ result = transforms.filter_column_references_statement(
 The library will raise `ValueError` when predicates cannot be safely removed:
 
 ```python
+import sqlglot
+from query_farm_sql_manipulation import transforms
+
 # This will raise ValueError because x = 1 is part of a larger expression
 sql = "SELECT * FROM data WHERE result = (x = 1)"
+statement = sqlglot.parse_one(sql, dialect="duckdb")
+
 # Cannot remove x = 1 because it's used as a value, not a predicate
+# This would raise ValueError if attempted
 ```
 
 ## Supported SQL Constructs

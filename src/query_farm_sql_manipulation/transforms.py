@@ -1,7 +1,8 @@
-from collections.abc import Container
+from collections.abc import Callable
 
 import sqlglot
 import sqlglot.expressions
+import sqlglot.optimizer.simplify
 
 
 def remove_expression_part(child: sqlglot.Expression) -> None:
@@ -65,16 +66,55 @@ def remove_expression_part(child: sqlglot.Expression) -> None:
         raise ValueError(f"Cannot remove child from parent of type {type(parent)} {parent.sql()}")
 
 
-def filter_column_references_statement(
-    *, sql: str, allowed_column_names: Container[str], dialect: str = "duckdb"
+def where_clause_contents(
+    statement: sqlglot.expressions.Expression,
+) -> sqlglot.expressions.Expression | None:
+    """
+    Extract the contents of the WHERE clause from a SQLGlot expression.
+    Args:
+        statement: The SQLGlot expression to extract from
+    Returns:
+        The contents of the WHERE clause, or None if no WHERE clause exists
+    """
+    where_clause = statement.find(sqlglot.expressions.Where)
+    if where_clause is None:
+        return None
+    return where_clause.this
+
+
+def filter_predicates_with_right_side_column_references(
+    statement: sqlglot.expressions.Expression,
+) -> sqlglot.Expression:
+    # Need to simplify the statement to move the column references to the
+    # left side by default.
+    statement = sqlglot.optimizer.simplify.simplify(statement)
+
+    # If there's no WHERE clause, nothing to filter
+    where_clause = statement.find(sqlglot.expressions.Where)
+    if where_clause is None:
+        return statement
+    assert where_clause is not None
+
+    for predicate in where_clause.find_all(sqlglot.expressions.Predicate):
+        assert predicate is not None
+        if predicate.right.find(sqlglot.expressions.Column):
+            remove_expression_part(predicate)
+
+    return statement
+
+
+def filter_column_references(
+    *,
+    statement: sqlglot.expressions.Expression,
+    selector: Callable[[sqlglot.expressions.Column], bool],
 ) -> sqlglot.Expression:
     """
     Filter SQL statement to remove predicates with columns not in allowed_column_names.
 
     Args:
         sql: The SQL statement to filter
-        allowed_column_names: Container of column names that should be preserved
-        dialect: The SQL dialect to use for parsing (default is "duckdb")
+        selector: A callable that determines if a column should be preserved.
+                  It should return True for columns that are allowed, and False for those to be removed.
 
     Returns:
         Filtered SQLGlot expression with non-allowed columns removed
@@ -82,9 +122,6 @@ def filter_column_references_statement(
     Raises:
         ValueError: If a column can't be cleanly removed due to interactions with allowed columns
     """
-    # Parse and optimize the statement for predictable traversal
-    statement = sqlglot.parse_one(sql, dialect=dialect)
-
     # If there's no WHERE clause, nothing to filter
     where_clause = statement.find(sqlglot.expressions.Where)
     if where_clause is None:
@@ -92,9 +129,7 @@ def filter_column_references_statement(
 
     # Find all column references not in allowed_column_names
     column_refs_to_remove = [
-        col
-        for col in where_clause.find_all(sqlglot.expressions.Column)
-        if col.name not in allowed_column_names
+        col for col in where_clause.find_all(sqlglot.expressions.Column) if not selector(col)
     ]
 
     # Process each column reference that needs to be removed
@@ -104,7 +139,7 @@ def filter_column_references_statement(
         closest_expression = _find_closest_removable_expression(column_ref)
 
         # Check if removing this expression would affect allowed columns
-        if _can_safely_remove_expression(closest_expression, allowed_column_names):
+        if _can_safely_remove_expression(closest_expression, selector):
             remove_expression_part(closest_expression)
         else:
             raise ValueError(
@@ -132,14 +167,16 @@ def _find_closest_removable_expression(
 
 
 def _can_safely_remove_expression(
-    expression: sqlglot.expressions.Expression, allowed_column_names: Container[str]
+    expression: sqlglot.expressions.Expression,
+    selector: Callable[[sqlglot.expressions.Column], bool],
 ) -> bool:
     """
     Check if an expression can be safely removed without affecting allowed columns.
 
     Args:
         expression: The expression to check
-        allowed_column_names: Container of allowed column names
+        selector: A callable that determines if a column should be preserved.
+                  It should return True for columns that are allowed, and False for those to be removed.
 
     Returns:
         True if the expression can be safely removed, False otherwise
@@ -161,9 +198,7 @@ def _can_safely_remove_expression(
 
     # Check if this expression references any allowed columns
     allowed_columns_referenced = [
-        col.name
-        for col in expression.find_all(sqlglot.expressions.Column)
-        if col.name in allowed_column_names
+        col.name for col in expression.find_all(sqlglot.expressions.Column) if selector(col)
     ]
 
     # If there are no allowed columns referenced, it's safe to remove
